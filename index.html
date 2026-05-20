@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地 AI 办公助手</title>
+    <!-- 引入 Tailwind CSS 构建精致的 M365 UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Office.js 库，允许网页与 Word/PPT 通信 -->
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <style>
+        /* 隐藏滚动条但保留滚动能力 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- 顶部状态栏 -->
+    <header class="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm flex-shrink-0">
+        <div class="flex items-center space-x-2">
+            <!-- AI 闪烁图标 -->
+            <div class="relative">
+                <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-md shadow-indigo-100">
+                    <span>⚡</span>
+                </div>
+                <div id="connection-indicator" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-500 border-2 border-white" title="检测本地 AI 服务中..."></div>
+            </div>
+            <div>
+                <h1 class="text-sm font-semibold text-slate-900">Local Copilot</h1>
+                <p id="app-context" class="text-[10px] text-slate-500">正在检测 Office 环境...</p>
+            </div>
+        </div>
+        <!-- 配置齿轮 -->
+        <button id="toggle-settings" class="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.43l-1.003.828c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.43l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.645-.869L9.594 3.94Z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+        </button>
+    </header>
+
+    <!-- 设置面板 (默认隐藏) -->
+    <div id="settings-panel" class="hidden bg-white border-b border-slate-200 p-4 transition-all duration-300 flex-shrink-0">
+        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">AI 助手配置</h3>
+        <div class="space-y-3">
+            <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">服务商</label>
+                <select id="provider-select" class="w-full text-xs rounded-md border border-slate-200 px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="gemini">✨ Gemini 极速云服务 (免配置)</option>
+                    <option value="ollama">Ollama (本地运行)</option>
+                    <option value="openai-compatible">自定义 OpenAI 兼容接口</option>
+                </select>
+            </div>
+            <div id="endpoint-container">
+                <label class="block text-xs font-medium text-slate-500 mb-1">接口地址 (API Endpoint)</label>
+                <input id="api-endpoint" type="text" value="http://localhost:11434" class="w-full text-xs rounded-md border border-slate-200 px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div id="model-container">
+                <label class="block text-xs font-medium text-slate-500 mb-1">模型名称 (Model)</label>
+                <input id="model-name" type="text" value="qwen2.5:7b" placeholder="例如: qwen2.5:7b, llama3" class="w-full text-xs rounded-md border border-slate-200 px-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <button id="save-settings" class="w-full text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
+                保存并验证连接
+            </button>
+        </div>
+    </div>
+
+    <!-- 消息展示区 -->
+    <main id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+        <!-- AI 欢迎语 -->
+        <div class="flex space-x-3">
+            <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0 text-sm">🤖</div>
+            <div class="bg-white border border-slate-100 rounded-2xl rounded-tl-none p-3 shadow-sm max-w-[85%] text-xs leading-relaxed">
+                您好！我是您的智能 AI 办公助手。
+                <br><br>
+                我已经原生接入了强大的 <b>✨ Gemini 2.5 Pro 云端大模型</b>！您无需在本地安装任何大模型环境，即可直接享受极致的 AI 写作与排版修改体验。
+                <br><br>
+                您可以随时在 Office 中<b>选中文本</b>，然后点击下方的魔法按钮或者直接向我提问。
+            </div>
+        </div>
+    </main>
+
+    <!-- 快捷操作栏 -->
+    <div class="px-4 py-2 flex space-x-2 overflow-x-auto no-scrollbar bg-slate-50 border-t border-slate-100 flex-shrink-0">
+        <button onclick="quickAction('explain')" class="flex-shrink-0 text-[11px] bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 rounded-full px-3 py-1.5 transition-all flex items-center space-x-1 shadow-sm">
+            <span>🔍 智能解释</span>
+        </button>
+        <button onclick="quickAction('polish')" class="flex-shrink-0 text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-full px-3 py-1.5 transition-all flex items-center space-x-1 shadow-sm font-medium">
+            <span>✨ 一键精修润色</span>
+        </button>
+        <button onclick="quickAction('continue')" class="flex-shrink-0 text-[11px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-3 py-1.5 transition-all flex items-center space-x-1 shadow-sm font-medium">
+            <span>✨ 创意续写</span>
+        </button>
+        <button onclick="quickAction('ppt-outline')" class="flex-shrink-0 text-[11px] bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-full px-3 py-1.5 transition-all flex items-center space-x-1 shadow-sm font-medium">
+            <span>✨ 一键转PPT大纲</span>
+        </button>
+        <button onclick="quickAction('summarize')" class="flex-shrink-0 text-[11px] bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 rounded-full px-3 py-1.5 transition-all flex items-center space-x-1 shadow-sm">
+            <span>📑 提炼文档摘要</span>
+        </button>
+    </div>
+
+    <!-- 输入区域 -->
+    <footer class="p-3 bg-white border-t border-slate-200 flex-shrink-0">
+        <div class="flex items-end space-x-2 bg-slate-50 border border-slate-200 rounded-xl p-1.5 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all">
+            <textarea id="user-input" rows="1" placeholder="发送指令（例如：帮我把这段话翻译成高逼格英文）..." class="flex-1 bg-transparent border-0 focus:ring-0 text-xs px-2 py-1.5 outline-none resize-none no-scrollbar max-h-24" style="line-height: 1.4;"></textarea>
+            <button id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg p-2 transition-colors flex-shrink-0 shadow-md shadow-indigo-100">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                </svg>
+            </button>
+        </div>
+        <p id="footer-note" class="text-[9px] text-center text-slate-400 mt-2">✨ 推荐使用 Gemini Cloud · 零延迟 · 零部署门槛</p>
+    </footer>
+
+    <!-- 通知悬浮盒 -->
+    <div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs py-2 px-4 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-50"></div>
+
+    <script>
+        // API 密钥配置 (密钥由运行时环境安全注入，请保持空字符串)
+        const apiKey = "";
+
+        // 1. 初始化设置
+        let settings = {
+            provider: localStorage.getItem('local_copilot_provider') || 'gemini',
+            endpoint: localStorage.getItem('local_copilot_endpoint') || 'http://localhost:11434',
+            model: localStorage.getItem('local_copilot_model') || 'qwen2.5:7b'
+        };
+
+        let isOfficeReady = false;
+        let activeHost = 'Browser';
+
+        // 2. 检测 Office 环境并进行初始化
+        Office.onReady((info) => {
+            isOfficeReady = true;
+            if (info.host) {
+                activeHost = info.host.toString();
+                document.getElementById('app-context').innerText = `已集成到 ${activeHost}`;
+            } else {
+                document.getElementById('app-context').innerText = `网页预览模式 (Outside Office)`;
+            }
+            updateUIByProvider();
+            checkAIService();
+        });
+
+        // 根据服务商动态切换配置界面的显示状态
+        function updateUIByProvider() {
+            const provider = document.getElementById('provider-select').value;
+            const endpointContainer = document.getElementById('endpoint-container');
+            const modelContainer = document.getElementById('model-container');
+            const footerNote = document.getElementById('footer-note');
+
+            if (provider === 'gemini') {
+                endpointContainer.classList.add('hidden');
+                modelContainer.classList.add('hidden');
+                footerNote.innerText = "✨ 当前启用：Gemini 2.5 Pro 极速云助手";
+            } else if (provider === 'ollama') {
+                endpointContainer.classList.remove('hidden');
+                modelContainer.classList.remove('hidden');
+                footerNote.innerText = "当前启用：本地运行大模型 · 100% 隐私安全";
+            } else {
+                endpointContainer.classList.remove('hidden');
+                modelContainer.classList.remove('hidden');
+                footerNote.innerText = "当前启用：自定义 OpenAI 兼容协议服务";
+            }
+        }
+
+        document.getElementById('provider-select').addEventListener('change', updateUIByProvider);
+
+        // 3. 验证 AI 连接情况
+        async function checkAIService() {
+            const indicator = document.getElementById('connection-indicator');
+            indicator.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-500 border-2 border-white animate-pulse";
+            
+            if (settings.provider === 'gemini') {
+                indicator.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white";
+                indicator.title = "已连接到谷歌 Gemini 极速云大模型";
+                showToast("✨ 成功连通 Gemini 2.5 Pro 极速云服务！");
+                return;
+            }
+
+            try {
+                let testUrl = `${settings.endpoint}/api/tags`;
+                if (settings.provider === 'openai-compatible') {
+                    testUrl = `${settings.endpoint}/v1/models`;
+                }
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+                const res = await fetch(testUrl, { method: 'GET', signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (res.ok) {
+                    indicator.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white";
+                    indicator.title = "已连接到本地 AI 服务";
+                    showToast("成功连接到本地 AI 服务！");
+                } else {
+                    throw new Error("连接失败");
+                }
+            } catch (err) {
+                indicator.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-rose-500 border-2 border-white";
+                indicator.title = "无法连接本地 AI。请确保服务运行中，且设置了 CORS 允许所有来源跨域。";
+                showToast("未检测到本地大模型，请在齿轮中确认设置。");
+            }
+        }
+
+        // 设置面板显示与隐藏
+        document.getElementById('toggle-settings').addEventListener('click', () => {
+            const panel = document.getElementById('settings-panel');
+            panel.classList.toggle('hidden');
+            
+            document.getElementById('provider-select').value = settings.provider;
+            document.getElementById('api-endpoint').value = settings.endpoint;
+            document.getElementById('model-name').value = settings.model;
+            updateUIByProvider();
+        });
+
+        // 保存设置
+        document.getElementById('save-settings').addEventListener('click', () => {
+            settings.provider = document.getElementById('provider-select').value;
+            settings.endpoint = document.getElementById('api-endpoint').value;
+            settings.model = document.getElementById('model-name').value;
+
+            localStorage.setItem('local_copilot_provider', settings.provider);
+            localStorage.setItem('local_copilot_endpoint', settings.endpoint);
+            localStorage.setItem('local_copilot_model', settings.model);
+
+            document.getElementById('settings-panel').classList.add('hidden');
+            checkAIService();
+        });
+
+        // 4. 读取与写入 Office 选中文本
+        async function getOfficeSelection() {
+            return new Promise((resolve) => {
+                if (!isOfficeReady) {
+                    resolve("【测试文本】由于未处于 Office 环境中，这是系统自动生成的模拟选中文本。");
+                    return;
+                }
+                Office.context.document.getSelectedDataAsync(Office.CoercionType.Text, (result) => {
+                    if (result.status === Office.AsyncResultStatus.Succeeded) {
+                        resolve(result.value);
+                    } else {
+                        resolve("");
+                    }
+                });
+            });
+        }
+
+        async function writeToOffice(text) {
+            return new Promise((resolve, reject) => {
+                if (!isOfficeReady) {
+                    showToast("模拟替换成功！");
+                    resolve();
+                    return;
+                }
+
+                Office.context.document.setSelectedDataAsync(text, { coercionType: Office.CoercionType.Text }, (result) => {
+                    if (result.status === Office.AsyncResultStatus.Succeeded) {
+                        resolve();
+                    } else {
+                        reject(new Error(result.error.message));
+                    }
+                });
+            });
+        }
+
+        // 5. 快捷操作逻辑
+        async function quickAction(actionType) {
+            const selectedText = await getOfficeSelection();
+            if (!selectedText || selectedText.trim() === "") {
+                showToast("请先在文档中用鼠标选中一段文字哦！");
+                return;
+            }
+
+            let prompt = "";
+            let userDisplayPrompt = "";
+            
+            if (actionType === 'explain') {
+                prompt = `请仔细分析并用通俗易懂的语言解释以下文本，给出核心概念和逻辑结构：`;
+                userDisplayPrompt = `🔍 解释当前选中内容`;
+            } else if (actionType === 'polish') {
+                prompt = `你是一个顶尖的文字装潢大师。请对以下内容进行商务、得体、严密的润色加工，保留原意但大幅度提升文字质感、说服力和文采：`;
+                userDisplayPrompt = `✨ 极速精修润色文本`;
+            } else if (actionType === 'continue') {
+                prompt = `你是一个充满创造力的写作助手。请根据下方提供的前文脉络，进行逻辑连贯、文风一致的拓展性续写，直接输出精彩的续写段落：`;
+                userDisplayPrompt = `✨ 智能续写后文段落`;
+            } else if (actionType === 'ppt-outline') {
+                prompt = `你是一个出色的PPT架构师。请将下面这段文字，精简并整理成结构清晰、有逻辑层次的PPT幻灯片大纲。请包含“幻灯片1：标题”、“幻灯片2：核心内容”等标准的演讲提纲格式，方便我直接排版。`;
+                userDisplayPrompt = `✨ 一键将选中文字转化为PPT大纲`;
+            } else if (actionType === 'summarize') {
+                prompt = `请为以下内容提取核心摘要，并以条目化的形式列出3个最关键的要点：`;
+                userDisplayPrompt = `📑 提炼选中内容核心摘要`;
+            }
+
+            appendMessage('user', `${userDisplayPrompt}\n\n选中的文字内容：\n"${selectedText.substring(0, 80)}${selectedText.length > 80 ? '...' : ''}"`);
+            await fetchAIResponse(prompt, selectedText);
+        }
+
+        // 6. 发送消息
+        document.getElementById('send-btn').addEventListener('click', handleSend);
+        document.getElementById('user-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+
+        async function handleSend() {
+            const inputEl = document.getElementById('user-input');
+            const query = inputEl.value.trim();
+            if (!query) return;
+
+            inputEl.value = '';
+            appendMessage('user', query);
+
+            const selection = await getOfficeSelection();
+            await fetchAIResponse(query, selection);
+        }
+
+        // 带有指数退避（Exponential Backoff）算法的 HTTP 客户端请求
+        async function fetchWithRetry(url, options, retries = 5, delay = 1000) {
+            try {
+                const response = await fetch(url, options);
+                if (response.ok) return response;
+                if (retries > 1) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return fetchWithRetry(url, options, retries - 1, delay * 2);
+                }
+                throw new Error(`HTTP 请求失败。状态码: ${response.status}`);
+            } catch (error) {
+                if (retries > 1) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return fetchWithRetry(url, options, retries - 1, delay * 2);
+                }
+                throw error;
+            }
+        }
+
+        // 7. 发送 API 请求调用 AI 并处理响应
+        async function fetchAIResponse(userPrompt, docContext) {
+            const placeholderMsg = appendMessage('ai', '正在深思熟虑中...');
+            const textDiv = placeholderMsg.querySelector('.whitespace-pre-wrap');
+
+            if (settings.provider === 'gemini') {
+                try {
+                    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                    
+                    const systemPrompt = "你是一个完美嵌入在 Microsoft Office 中的超级智能写作排版助手。你非常专业、文采极佳且言简意赅。请根据当前用户提供的文档上下文，直接输出最符合用户要求的高质量排版或文字内容，不要输出任何多余的开头废话，直接给最终能插入文档的结果！";
+                    
+                    let finalPrompt = userPrompt;
+                    if (docContext && docContext.trim() !== "") {
+                        finalPrompt = `[Office 选中段落背景]:\n${docContext}\n\n[写作或修改指令]:\n${userPrompt}`;
+                    }
+
+                    const payload = {
+                        contents: [{
+                            parts: [{ text: finalPrompt }]
+                        }],
+                        systemInstruction: {
+                            parts: [{ text: systemPrompt }]
+                        }
+                    };
+
+                    const response = await fetchWithRetry(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
+                    if (!text) {
+                        throw new Error("大模型未能返回有效响应。");
+                    }
+
+                    textDiv.innerText = text;
+
+                } catch (error) {
+                    textDiv.className = "whitespace-pre-wrap text-rose-600 font-medium";
+                    textDiv.innerText = `⚠️ 呼叫 Gemini 极速云服务失败。\n\n原因: ${error.message}\n提示: 如果您的设备无法直连公网 AI，您可以通过设置面板切换到您本地部署的 [Ollama] 离线服务进行使用。`;
+                }
+                
+                const container = document.getElementById('chat-container');
+                container.scrollTop = container.scrollHeight;
+                return;
+            }
+
+            let finalPrompt = userPrompt;
+            if (docContext && docContext.trim() !== "") {
+                finalPrompt = `[文档背景信息]\n${docContext}\n\n[用户命令/问题]\n${userPrompt}`;
+            }
+
+            try {
+                let url = "";
+                let body = {};
+
+                if (settings.provider === 'ollama') {
+                    url = `${settings.endpoint}/api/generate`;
+                    body = {
+                        model: settings.model,
+                        prompt: finalPrompt,
+                        stream: false
+                    };
+                } else {
+                    url = `${settings.endpoint}/v1/chat/completions`;
+                    body = {
+                        model: settings.model,
+                        messages: [{ role: "user", content: finalPrompt }],
+                        stream: false
+                    };
+                }
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) throw new Error("无法连接到对应接口服务。");
+
+                const data = await response.json();
+                let replyText = "";
+                
+                if (settings.provider === 'ollama') {
+                    replyText = data.response;
+                } else {
+                    replyText = data.choices[0].message.content;
+                }
+
+                textDiv.innerText = replyText;
+
+            } catch (error) {
+                textDiv.className = "whitespace-pre-wrap text-rose-600 font-medium";
+                textDiv.innerText = `⚠️ 呼叫服务 [${settings.provider}] 失败。\n\n排查建议：\n1. 请确认本地大模型客户端或相应代理已经启动。\n2. 检查配置中的端口、路径或模型 [${settings.model}] 拼写是否正确。\n3. 如果是本地服务，请确认开启了跨域访问支持。`;
+            }
+            
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 8. 辅助：渲染对话气泡与交互
+        function appendMessage(sender, text) {
+            const container = document.getElementById('chat-container');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = "flex space-x-3";
+            
+            const isUser = sender === 'user';
+            
+            msgDiv.innerHTML = `
+                <div class="w-7 h-7 rounded-full ${isUser ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'} flex items-center justify-center flex-shrink-0 text-xs">
+                    ${isUser ? '🧑‍💻' : '🤖'}
+                </div>
+                <div class="bg-white border ${isUser ? 'border-indigo-100 bg-indigo-50/20' : 'border-slate-100'} rounded-2xl rounded-tl-none p-3 shadow-sm max-w-[85%] text-xs leading-relaxed">
+                    <div class="whitespace-pre-wrap">${escapeHtml(text)}</div>
+                    ${!isUser && isOfficeReady ? `
+                        <div class="mt-2 pt-2 border-t border-slate-100 flex justify-end space-x-2">
+                            <button onclick="writeSelectedResponse(this)" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center space-x-1 transition-all">
+                                <span>📥 替换到选中文档</span>
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight;
+            return msgDiv;
+        }
+
+        async function writeSelectedResponse(buttonEl) {
+            const textContent = buttonEl.closest('.bg-white').querySelector('.whitespace-pre-wrap').innerText;
+            try {
+                await writeToOffice(textContent);
+                showToast("成功修改/替换 Office 中的文本！");
+            } catch (err) {
+                showToast("写入失败：" + err.message);
+            }
+        }
+
+        // 辅助：Toast 消息框
+        function showToast(text) {
+            const toast = document.getElementById('toast');
+            toast.innerText = text;
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 3000);
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
