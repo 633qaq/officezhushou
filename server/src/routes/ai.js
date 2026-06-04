@@ -152,7 +152,11 @@ router.get('/styles', (_req, res) => {
 
 router.post('/check-connection', async (req, res) => {
   const provider = req.body.provider || 'gemini';
-  const connected = await checkConnection(provider);
+  const connected = await checkConnection(provider, {
+    apiKey: req.body.apiKey,
+    model: req.body.model,
+    style: req.body.style,
+  });
   res.json({ success: true, data: { connected } });
 });
 

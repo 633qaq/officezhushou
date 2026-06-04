@@ -417,7 +417,7 @@
       <section class="panel">
         <div class="panel-header">
           <div class="panel-title">生成结果</div>
-          <div class="subtitle">支持复制、写回 Office 和保存到服务端</div>
+          <div class="subtitle">默认免配置可生成草稿；配置 API Key 后升级为 AI</div>
         </div>
         <div class="panel-body">
           <div class="result-box empty" id="resultBox">AI 生成内容会显示在这里。</div>
@@ -447,7 +447,7 @@
           </div>
 
           <div class="field">
-            <label for="providerSelect">AI 服务商</label>
+            <label for="providerSelect">生成模式 / AI 服务商</label>
             <select id="providerSelect"></select>
           </div>
 
@@ -468,10 +468,14 @@
 
           <div class="field">
             <label for="apiKeyInput">API Key</label>
-            <input id="apiKeyInput" type="password" placeholder="Ollama 可留空" />
+            <input id="apiKeyInput" type="password" placeholder="免配置模板不用填；云端 AI 需要填写" />
           </div>
 
           <button id="saveSettingsBtn" class="primary">保存配置</button>
+
+          <div class="subtitle" id="configHint">
+            第一次使用建议保持“免配置模板”，先生成草稿并写回 PPT。需要真正 AI 时再选择 Gemini、DeepSeek、OpenAI 等并填写 API Key。
+          </div>
 
           <div class="field">
             <label for="usernameInput">账号</label>
@@ -496,7 +500,7 @@
       <div class="footer-card">
         <div>
           <strong>Office AI Assistant</strong>
-          <div class="footer-meta">面向 PowerPoint 工作流的生成、润色、保存与回写工具</div>
+          <div class="footer-meta">先在 PPT 中选中一个文本框，再点击“写回 Office”可把结果插入当前页</div>
         </div>
         <div id="footerStatus">就绪</div>
       </div>
@@ -549,10 +553,16 @@
 
     function refreshMode() {
       const mode = PPTEngine.getMode();
+      const settings = PPTEngine.getSettings();
+      const isAutoProxy = mode.mode === 'direct'
+        && Boolean(mode.serverUrl)
+        && !['local', 'ollama'].includes(settings.provider);
       $('modeText').textContent = mode.mode === 'proxy'
         ? (mode.authenticated ? '服务端已登录' : '服务端未登录')
-        : '直连模式';
-      $('serverDot').classList.toggle('ok', mode.mode === 'proxy' && mode.authenticated);
+        : isAutoProxy
+          ? '本地代理'
+          : '直连模式';
+      $('serverDot').classList.toggle('ok', isAutoProxy || (mode.mode === 'proxy' && mode.authenticated));
       $('directModeBtn').classList.toggle('active', mode.mode === 'direct');
       $('proxyModeBtn').classList.toggle('active', mode.mode === 'proxy');
       $('serverUrlInput').value = mode.serverUrl;
@@ -565,6 +575,17 @@
       $('modelInput').value = settings.model || '';
       $('endpointInput').value = settings.endpoint || '';
       $('apiKeyInput').value = settings.apikey || '';
+      refreshConfigHint(settings.provider);
+    }
+
+    function refreshConfigHint(provider) {
+      const isLocal = provider === 'local';
+      $('apiKeyInput').disabled = isLocal;
+      $('endpointInput').disabled = isLocal;
+      $('modelInput').disabled = isLocal;
+      $('configHint').textContent = isLocal
+        ? '当前是免配置模板模式：不需要 API Key，可以立即生成 PPT 草稿、备注和设计建议。'
+        : '当前是云端 AI 模式：在本地加载项中会自动通过 http://localhost:3456 代理调用，避免 Office 直接请求 DeepSeek 被拦。';
     }
 
     function saveSettingsFromForm() {
@@ -699,6 +720,11 @@
     $('saveSettingsBtn').addEventListener('click', () => {
       saveSettingsFromForm();
       showToast('配置已保存', 'ok');
+    });
+
+    $('providerSelect').addEventListener('change', () => {
+      refreshConfigHint($('providerSelect').value);
+      refreshMode();
     });
 
     $('directModeBtn').addEventListener('click', () => {

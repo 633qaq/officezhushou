@@ -205,7 +205,7 @@ function getStyles() {
   return Object.entries(STYLES).map(([id, label]) => ({ id, label }));
 }
 
-async function checkConnection(provider) {
+async function checkConnection(provider, options = {}) {
   try {
     if (provider === 'ollama') {
       const response = await fetch(`${config.ai.ollama.baseUrl || 'http://localhost:11434'}/api/tags`, {
@@ -216,6 +216,9 @@ async function checkConnection(provider) {
 
     await callAI(provider, 'Reply with OK only.', {
       systemPrompt: 'Reply with OK only.',
+      apiKey: options.apiKey,
+      model: options.model,
+      style: options.style,
     });
     return true;
   } catch (error) {
