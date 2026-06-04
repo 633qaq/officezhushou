@@ -39,6 +39,8 @@
 3. 点击功能按钮生成、润色或扩写内容
 4. 将结果复制、写回 Office，或保存到服务端文档
 
+Excel、Word、PowerPoint 的安装和使用步骤见 `USER_GUIDE.md`。
+
 ## 配置项
 
 - AI 服务商

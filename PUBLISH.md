@@ -34,6 +34,8 @@ npx office-addin-manifest validate manifest.xml
    - Internal organization use: upload `manifest.xml` through Microsoft 365 centralized deployment.
    - Public marketplace use: submit through Microsoft AppSource and provide required privacy, terms, support, and branding information.
 
+User-facing installation and first-run instructions are in `USER_GUIDE.md`.
+
 ## Backend deployment
 
 GitHub Pages can host the task pane UI, but it cannot run the Node.js API in `server/src`.
