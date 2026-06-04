@@ -1,0 +1,29 @@
+﻿{
+  "name": "officezhushou-server",
+  "version": "2.0.0",
+  "description": "Office AI 助手后端服务，提供 AI 代理、用户认证、设置和文档存储接口。",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node tests/run.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "sql.js": "^1.11.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.0"
+  },
+  "optionalDependencies": {
+    "officegen": "^0.10.0",
+    "puppeteer": "^23.0.0"
+  }
+}
